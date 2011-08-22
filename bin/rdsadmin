@@ -1,0 +1,379 @@
+#!/usr/bin/ruby
+# -*- coding: utf-8 -*-
+
+$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
+begin
+  require 'rubygems'
+  require 'bundler/setup'
+rescue Exception => e
+end
+
+require 'rubygems'
+require 'thor'
+require 'right_aws'
+
+class Rdsadmin < Thor
+  RDS = RightAws::RdsInterface.new(ENV['AWS_ACCESS_KEY_ID'], ENV['AWS_SECRET_ACCESS_KEY'])
+
+  #-----------------------------------------------------------------
+  # Short cuts
+  #-----------------------------------------------------------------
+
+  desc "ls_insts", "list db instances"
+  def ls_insts
+    RDS.describe_db_instances.each { |entry|
+      puts entry[:aws_id]
+    }
+  end
+
+  desc "ls_snaps", "list db snapshots"
+  def ls_snaps
+    RDS.describe_db_snapshots.each { |entry|
+      puts entry[:aws_id]
+    }
+  end
+
+  desc "ls_param_groups", "list db parameter groups"
+  def ls_param_groups
+    RDS.describe_db_parameter_groups.each { |entry|
+      puts entry[:name]
+    }
+  end
+
+  desc "ls_params", "list db parameters"
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  def ls_params
+    RDS.describe_db_parameters(options[:db_parameter_group_name]).each { |entry|
+      puts "#{entry[:name]} = #{entry[:value]}"
+    }
+  end
+
+  desc "ls_security_groups", "list db parameter groups"
+  def ls_security_groups
+    RDS.describe_db_security_groups().each { |entry|
+      puts entry[:name]
+    }
+  end
+
+  # --------------------------------------------
+  #  DB Instances
+  # --------------------------------------------
+
+  desc 'describe_db_instances', 'describe db instances'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id'
+  def describe_db_instances
+    dump(RDS.describe_db_instances(options[:aws_id]))
+  end
+
+  desc 'create_db_instance', 'create_db_instance'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  method_option :master_username, :aliases => '-u', :type => :string, :desc => 'master_username', :required => true
+  method_option :master_user_password, :aliases => '-p', :type => :string, :desc => 'master_user_password', :required => true
+  method_option :db_instance_class, :type => :string, :desc => 'db_instance_class' # "db.m1.large"
+  method_option :multi_az, :type => :boolean, :desc => 'multi_az' # true
+  method_option :auto_mirror_version_upgrade, :type => :boolean, :desc => 'auto_mirror_version_upgrade' # false
+  method_option :db_security_groups, :type => :array, :desc => 'db_security_groups' # "default"
+  def create_db_instance
+    params = options.dup
+    params.delete(:aws_id)
+    params.delete(:master_username)
+    params.delete(:master_user_password)
+    dump(RDS.create_db_instance(options[:aws_id], options[:master_username], options[:master_user_password], params))
+  end
+
+  desc 'modify_db_instance', 'modify_db_instance'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  method_option :master_user_password, :aliases => '-p', :type => :string, :desc => 'master_user_password'
+  method_option :instance_class, :type => :string, :desc => 'instance_class' # "db.m1.large"
+  method_option :preferred_maintenance_window, :type => :string # => 'sun:06:00-sun:10:00',
+  method_option :backup_retention_period, :type => :numeric # => 2
+  method_option :preferred_backup_window, :type => :string # => '02:00-04:00',
+  method_option :allocated_storage, :type => :numeric # => 30
+  method_option :multi_az, :type => :boolean, :desc => 'multi_az' # true
+  method_option :engine_version, :type => :string, :desc => 'engine_version'
+  method_option :auto_minor_version_upgrade, :type => :boolean # => true,
+  method_option :allow_major_version_upgrade, :type => :boolean # => true,
+  method_option :apply_immediately, :type => :boolean # => true,
+  method_option :db_security_groups, :type => :array, :desc => 'db_security_groups' # "default"
+  method_option :db_parameter_group, :type => :array, :desc => 'db_parameter_group' # "default"
+  def modify_db_instance
+    params = options.dup
+    params.delete(:aws_id)
+    dump(RDS.modify_db_instance(options[:aws_id], params))
+  end
+
+  desc 'reboot_db_instance', 'reboot_db_instance'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  def reboot_db_instance
+    params = options.dup
+    params.delete(:aws_id)
+    dump(RDS.reboot_db_instance(options[:aws_id], params))
+  end
+
+  desc 'delete_db_instance', 'delete_db_instance'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  def delete_db_instance
+    params = options.dup
+    params.delete(:aws_id)
+    dump(RDS.delete_db_instance(options[:aws_id], params))
+  end
+
+  # --------------------------------------------
+  #  DB SecurityGroups
+  # --------------------------------------------
+
+  desc 'describe_db_security_groups', 'describe_db_security_groups'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name'
+  def describe_db_security_groups
+    dump(RDS.describe_db_security_groups(options[:db_security_group_name]))
+  end
+
+  desc 'create_db_security_group', 'create_db_security_group'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  method_option :db_security_group_description, :aliases => '-d', :type => :string, :desc => 'db_security_group_description', :required => true
+  def create_db_security_group
+    dump(RDS.create_db_security_group(options[:db_security_group_name], options[:db_security_group_description]))
+  end
+
+  # [memo] no need to implement this method in this program.
+  # def modify_db_security_group_ingress(action, db_security_group_name, params={}) # :nodoc:
+  # end
+
+  desc 'authorize_db_security_group_ingress', 'authorize_db_security_group_ingress'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  # pattern#1
+  method_option :cidrip, :type => :string, :desc => 'cidrip'
+  # pattern#2
+  method_option :ec2_security_group_owner, :type => :numeric, :desc => 'ec2_security_group_owner'
+  method_option :ec2_security_group_name, :type => :string, :desc => 'ec2_security_group_name'
+  def authorize_db_security_group_ingress
+    if (options[:cidrip] and options[:ec2_security_group_owner].nil? and options[:ec2_security_group_owner].nil?)
+      # pattern #1
+      dump(RDS.authorize_db_security_group_ingress(options[:db_security_group_name], :cidrip => options[:cidrip]))
+    elsif (options[:cidrip].nil? and options[:ec2_security_group_owner] and options[:ec2_security_group_name])
+      # pattern #2
+      dump(RDS.authorize_db_security_group_ingress(options[:db_security_group_name],
+                                                   :ec2_security_group_owner => options[:ec2_security_group_owner],
+                                                   :ec2_security_group_name  => options[:ec2_security_group_name]))
+    else
+      raise "no mutch pattern"
+    end
+  end
+
+  desc 'revoke_db_security_group_ingress', 'revoke_db_security_group_ingress'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  # pattern#1
+  method_option :cidrip, :type => :string, :desc => 'cidrip'
+  # pattern#2
+  method_option :ec2_security_group_owner, :type => :numeric, :desc => 'ec2_security_group_owner'
+  method_option :ec2_security_group_name, :type => :string, :desc => 'ec2_security_group_name'
+  def revoke_db_security_group_ingress
+    if (options[:cidrip] and options[:ec2_security_group_owner].nil? and options[:ec2_security_group_owner].nil?)
+      # pattern #1
+      dump(RDS.revoke_db_security_group_ingress(options[:db_security_group_name], :cidrip => options[:cidrip]))
+    elsif (options[:cidrip].nil? and options[:ec2_security_group_owner] and options[:ec2_security_group_name])
+      # pattern #2
+      dump(RDS.revoke_db_security_group_ingress(options[:db_security_group_name],
+                                                :ec2_security_group_owner => options[:ec2_security_group_owner],
+                                                :ec2_security_group_name  => options[:ec2_security_group_name]))
+    else
+      raise "no mutch pattern"
+    end
+  end
+
+  desc 'delete_db_security_group', 'delete_db_security_group'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name'
+  def delete_db_security_group
+    dump(RDS.delete_db_security_group(options[:db_security_group_name]))
+  end
+
+  # --------------------------------------------
+  #  DB ParameterGroups
+  # --------------------------------------------
+
+  desc 'describe_db_parameter_groups', 'describe db parameter groups'
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name'
+  def describe_db_parameter_groups
+    dump(RDS.describe_db_parameter_groups(options[:db_parameter_group_name]))
+  end
+
+  desc 'create_db_parameter_group', 'create_db_parameter_group'
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  method_option :db_parameter_group_description, :aliases => '-d', :type => :string, :desc => 'db_parameter_group_description', :required => true
+  def create_db_parameter_group
+    params = options.dup
+    params.delete(:db_parameter_group_name)
+    params.delete(:db_parameter_group_description)
+    dump(RDS.create_db_parameter_group(options[:db_parameter_group_name], options[:db_parameter_group_description]))
+  end
+
+  desc 'modify_db_parameter_group', 'modify_db_parameter_group'
+  method_option :db_security_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  method_option :max_allowed_packet, :type => :string, :desc => 'max_allowed_packet' # 16777216 (16M)
+  method_option :character_set_client, :type => :string, :desc => 'character_set_client' # "utf8"
+  method_option :character_set_connection, :type => :string, :desc => 'character_set_connection' # "utf8"
+  method_option :character_set_database, :type => :string, :desc => 'character_set_database' # "utf8"
+  method_option :character_set_results, :type => :string, :desc => 'character_set_results' # "utf8"
+  method_option :character_set_server, :type => :string, :desc => 'character_set_server' # "utf8"
+  def modify_db_parameter_group
+    params = options.dup
+    params.delete(:db_security_group_name)
+    dump(RDS.modify_db_parameter_group(options[:db_security_group_name], params))
+  end
+
+  desc 'delete_db_parameter_group', 'delete_db_parameter_group'
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  def delete_db_parameter_group
+    dump(RDS.delete_db_parameter_group(options[:db_parameter_group_name]))
+  end
+
+  desc 'reset_db_parameter_group', 'reset_db_parameter_group'
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  def reset_db_parameter_group
+    dump(RDS.reset_db_parameter_group(options[:db_parameter_group_name], :all))
+  end
+
+  desc 'describe_db_parameters', 'describe_db_parameters'
+  method_option :db_parameter_group_name, :aliases => '-n', :type => :string, :desc => 'db_security_group_name', :required => true
+  def describe_db_parameters
+    dump(RDS.describe_db_parameters(options[:db_parameter_group_name]))
+  end
+
+  desc 'describe_engine_default_parameters', 'describe_engine_default_parameters'
+  method_option :db_parameter_group_family, :aliases => '-f', :type => :string, :desc => 'db_parameter_group_family'
+  def describe_engine_default_parameters
+    if options[:db_parameter_group_family].nil?
+      dump(RDS.describe_engine_default_parameters)
+    else
+      dump(RDS.describe_engine_default_parameters(options[:db_parameter_group_family]))
+    end
+  end
+
+
+  # --------------------------------------------
+  #  DB Snapshots
+  # --------------------------------------------
+
+  desc 'describe_db_snapshots', 'describe_db_snapshots'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'instance id'
+  def describe_db_snapshots
+    dump(RDS.describe_db_snapshots(options[:aws_id]))
+  end
+
+  desc 'create_db_snapshot', 'create_db_snapshot'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  method_option :instance_aws_id, :type => :string, :desc => 'instance_aws_id', :required => true
+  def create_db_snapshot
+    pp dump(RDS.create_db_snapshot(options[:aws_id], options[:instance_aws_id]))
+  end
+
+  desc 'restore_db_instance_from_db_snapshot', 'restore_db_instance_from_db_snapshot'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'snapshot aws_id', :required => true
+  method_option :instance_aws_id, :type => :string, :desc => 'instance_aws_id', :required => true
+  method_option :db_instance_class, :type => :string, :desc => 'db_instance_class' # "db.m1.large"
+  method_option :endpoint_port, :type => :string, :desc => 'endpoint_port'
+  method_option :availability_zone, :type => :string, :desc => 'availability_zone'
+  method_option :multi_az, :type => :boolean, :desc => 'multi_az' # true
+  method_option :auto_mirror_version_upgrade, :type => :boolean, :desc => 'auto_mirror_version_upgrade' # false
+  def restore_db_instance_from_db_snapshot
+    params = options.dup
+    params.delete(:aws_id)
+    params.delete(:new_instance_aws_id)
+    dump(RDS.restore_db_instance_from_db_snapshot(options[:aws_id], options[:instance_aws_id], params))
+  end
+
+  desc 'restore_db_instance_to_point_in_time', 'restore_db_instance_to_point_in_time'
+  method_option :instance_aws_id, :type => :string, :desc => 'instance_aws_id', :required => true
+  method_option :new_instance_aws_id, :type => :string, :desc => 'new_instance_aws_id', :required => true
+  method_option :use_latest_restorable_time, :type => :string, :desc => 'use_latest_restorable_time'
+  method_option :restore_time, :type => :string, :desc => 'restore_time'
+  method_option :instance_class, :type => :string, :desc => 'instance_class'
+  method_option :multi_az, :type => :string, :desc => 'multi_az'
+  method_option :endpoint_port, :type => :string, :desc => 'endpoint_port'
+  method_option :availability_zone, :type => :string, :desc => 'availability_zone'
+  method_option :auto_minor_version_upgrade, :type => :string, :desc => 'auto_minor_version_upgrade'
+  def restore_db_instance_to_point_in_time
+    params = options.dup
+    params.delete(:instance_aws_id)
+    params.delete(:new_instance_aws_id)
+    dump(RDS.restore_db_instance_to_point_in_time(options[:instance_aws_id], options[:new_instance_aws_id], params))
+  end
+
+  desc 'delete_db_snapshot', 'delete_db_snapshot'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  def delete_db_snapshot
+    dump(RDS.delete_db_snapshot(options[:aws_id]))
+  end
+
+
+  # --------------------------------------------
+  #  DB Events
+  # --------------------------------------------
+
+  desc 'describe_events', 'describe_events'
+  def describe_events
+    dump(RDS.describe_events)
+  end
+
+  # --------------------------------------------
+  #  DB Engine Versions
+  # --------------------------------------------
+
+  desc 'describe_db_engine_versions', 'describe_db_engine_versions'
+  def describe_db_engine_versions
+    dump(RDS.describe_db_engine_versions)
+  end
+
+
+  # --------------------------------------------
+  #  DB Replicas
+  # --------------------------------------------
+
+  desc 'create_db_instance_read_replica', 'create_db_instance_read_replica'
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id', :required => true
+  method_option :source_db_instance_identifier, :type => :string, :desc => 'source_db_instance_identifier', :required => true
+  method_option :endpoint_port, :type => :string, :desc => 'endpoint_port'
+  method_option :availability_zone, :type => :string, :desc => 'availability_zone'
+  method_option :db_instance_class, :type => :string, :desc => 'db_instance_class' # "db.m1.large"
+  method_option :auto_mirror_version_upgrade, :type => :boolean, :desc => 'auto_mirror_version_upgrade' # false
+  def create_db_instance_read_replica
+    params = options.dup
+    params.delete(:aws_id)
+    params.delete(:source_db_instance_identifier)
+    # [TODO] not yet tested
+    dump(RDS.create_db_instance_read_replica(options[:aws_id], options[:source_db_instance_identifier], params))
+  end
+
+  #---------------------------------------------
+  #  Reserved Instances
+  #---------------------------------------------
+
+  desc 'describe_reserved_db_instances_offerings', 'describe_reserved_db_instances_offerings'
+  def describe_reserved_db_instances_offerings
+    dump(RDS.describe_reserved_db_instances_offerings)
+  end
+
+  desc 'describe_reserved_db_instances', 'describe_reserved_db_instances'
+  def describe_reserved_db_instances
+    dump(RDS.describe_reserved_db_instances)
+  end
+
+  desc 'purchase_reserved_db_instances_offering', 'purchase_reserved_db_instances_offering'
+  method_option :offering_aws_id, :type => :string, :desc => 'offering_aws_id', :required => true
+  method_option :aws_id, :aliases => '-i', :type => :string, :desc => 'aws_id'
+  method_option :count, :aliases => '-c', :type => :numeric, :desc => 'count'
+  def purchase_reserved_db_instances_offering
+    params = options.dup
+    params.delete(:offering_aws_id)
+    # [TODO] not yet tested
+    dump(RDS.purchase_reserved_db_instances_offering(options[:offering_aws_id], params))
+  end
+
+  private
+  def dump(hash)
+    #hash.each { |item| pp item }
+    pp hash
+  end
+end
+
+Rdsadmin.start
