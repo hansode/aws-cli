@@ -1,0 +1,17 @@
+== SET UP:
+
+$ make
+
+== PREPARE:
+
+$ export AWS_ACCESS_KEY_ID=********
+$ export AWS_SECRET_ACCESS_KEY=********
+
+== RUN:
+
+$ ./bin/rdsadmin
+
+$ ./bin/rdsadmin ls_insts             
+$ ./bin/rdsadmin ls_param_groups      
+$ ./bin/rdsadmin ls_security_groups   
+$ ./bin/rdsadmin ls_snaps             
